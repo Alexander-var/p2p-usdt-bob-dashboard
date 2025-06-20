@@ -1,13 +1,54 @@
 # ================================
 # Proyecto Dashboards Binance – Streamlit
 #   • dashboard_p2p.py   → precios P2P USDT/BOB
-#   • btc_dashboard.py   → precios Spot BTC/USDT en vivo (5 s)
-# ================================
-# Requisitos (requirements.txt)
+#   • # ----------  btc_dashboard.py  ----------
+import streamlit as st
+import requests
+import pandas as pd
+import time
+from datetime import datetime
+import plotly.graph_objects as go
+
+# CONFIGURACIÓN
+REFRESH_SEC = 5  # segundos entre recargas automáticas
+st.set_page_config(page_title="BTC/USDT Spot – Live", layout="wide")
+
+# ----------------- AUTO‑REFRESH -----------------
+if 'last_run' not in st.session_state:
+    st.session_state['last_run'] = time.time()
+else:
+    if time.time() - st.session_state['last_run'] >= REFRESH_SEC:
+        st.session_state['last_run'] = time.time()
+        st.experimental_rerun()
+# ------------------------------------------------
+
+# precio spot actual
+price = float(requests.get("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", timeout=10).json()['price'])
+
+# últimas 100 velas de 1 min
+kl_url = "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=100"
+klines = requests.get(kl_url, timeout=10).json()
+cols = ['open_time','open','high','low','close','volume','close_time','qav','n_trades','tb_base','tb_quote','ignore']
+df_c = pd.DataFrame(klines, columns=cols)
+df_c['open_time'] = pd.to_datetime(df_c['open_time'], unit='ms')
+for col in ['open','high','low','close']:
+    df_c[col] = df_c[col].astype(float)
+
+st.title(f"📈 BTC/USDT Spot – Precio en tiempo real (auto {REFRESH_SEC}s)")
+st.metric("Precio actual", f"${price:,.2f}")
+
+fig_c = go.Figure(data=[go.Candlestick(x=df_c['open_time'],
+                                       open=df_c['open'], high=df_c['high'], low=df_c['low'], close=df_c['close'],
+                                       increasing_line_color='green', decreasing_line_color='red')])
+fig_c.update_layout(title='Velas BTC/USDT – 1 min (últimas 100)',
+                    xaxis_title='Hora', yaxis_title='Precio (USDT)',
+                    template='plotly_dark', xaxis_rangeslider_visible=False, height=600)
+st.plotly_chart(fig_c, use_container_width=True)
+
+st.caption("La página se recarga automáticamente cada 5 segundos gracias a st.experimental_rerun.")
 # --------------------------------------------------
 # streamlit
-# streamlit-extras   # para st_autorefresh
-# requests
+# # requests
 # pandas
 # plotly
 # --------------------------------------------------
